@@ -1,0 +1,34 @@
+{
+  "axis": "professor",
+  "schedule_spec": null,
+  "courses": [
+    {
+      "name": "CSE 410",
+      "priority": 1,
+      "sections": [
+        {"class_number": "10001", "instructor": "A. Rivera", "rating": 4.5,
+         "days": ["Mon", "Wed", "Fri"], "start": "10:00", "end": "10:50"},
+        {"class_number": "10002", "instructor": "B. Chen", "rating": 3.2,
+         "days": ["Tue", "Thu"], "start": "13:30", "end": "14:45"}
+      ]
+    },
+    {
+      "name": "CSE 430",
+      "priority": 2,
+      "sections": [
+        {"class_number": "10101", "instructor": "C. Patel", "rating": 4.5,
+         "days": ["Mon", "Wed", "Fri"], "start": "10:00", "end": "10:50"},
+        {"class_number": "10102", "instructor": "D. Nguyen", "rating": 4.1,
+         "days": ["Tue", "Thu"], "start": "14:00", "end": "15:15"}
+      ]
+    },
+    {
+      "name": "HIST 103",
+      "priority": 3,
+      "sections": [
+        {"class_number": "10201", "instructor": "E. Brooks", "rating": null,
+         "days": ["Mon", "Wed", "Fri"], "start": "11:00", "end": "11:50"}
+      ]
+    }
+  ]
+}
