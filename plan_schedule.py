@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pick one non-conflicting section per course, in priority order, by the student's chosen axis.
 
-Input (JSON, via --input or bundled sample via --sample):
+Input (JSON, via --input, or the built-in example via --sample):
 {
   "axis": "professor" | "schedule",
   "schedule_spec": {"earliest_start": "10:00", "latest_end": "15:00",
@@ -29,10 +29,42 @@ import json
 import sys
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-SAMPLE_INPUT = SCRIPT_DIR.parent / "assets" / "sample_input.json"
-
 UNRATED_SCORE = 0  # worse than any real rating (-1 to -5), so unrated sections sort last
+
+SAMPLE_INPUT = {
+    "axis": "professor",
+    "schedule_spec": None,
+    "courses": [
+        {
+            "name": "CSE 410",
+            "priority": 1,
+            "sections": [
+                {"class_number": "10001", "instructor": "A. Rivera", "rating": 4.5,
+                 "days": ["Mon", "Wed", "Fri"], "start": "10:00", "end": "10:50"},
+                {"class_number": "10002", "instructor": "B. Chen", "rating": 3.2,
+                 "days": ["Tue", "Thu"], "start": "13:30", "end": "14:45"},
+            ],
+        },
+        {
+            "name": "CSE 430",
+            "priority": 2,
+            "sections": [
+                {"class_number": "10101", "instructor": "C. Patel", "rating": 4.5,
+                 "days": ["Mon", "Wed", "Fri"], "start": "10:00", "end": "10:50"},
+                {"class_number": "10102", "instructor": "D. Nguyen", "rating": 4.1,
+                 "days": ["Tue", "Thu"], "start": "14:00", "end": "15:15"},
+            ],
+        },
+        {
+            "name": "HIST 103",
+            "priority": 3,
+            "sections": [
+                {"class_number": "10201", "instructor": "E. Brooks", "rating": None,
+                 "days": ["Mon", "Wed", "Fri"], "start": "11:00", "end": "11:50"},
+            ],
+        },
+    ],
+}
 
 
 def parse_time(t):
@@ -152,17 +184,15 @@ def main():
     args = ap.parse_args()
 
     if args.sample:
-        path = SAMPLE_INPUT
+        data = SAMPLE_INPUT
     elif args.input:
-        path = Path(args.input)
+        try:
+            data = json.loads(Path(args.input).read_text())
+        except (OSError, json.JSONDecodeError) as e:
+            print(f"error: could not read input JSON ({e})", file=sys.stderr)
+            sys.exit(2)
     else:
         print("error: pass --input <file> or --sample", file=sys.stderr)
-        sys.exit(2)
-
-    try:
-        data = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as e:
-        print(f"error: could not read input JSON ({e})", file=sys.stderr)
         sys.exit(2)
 
     print(json.dumps(plan(data), indent=2))

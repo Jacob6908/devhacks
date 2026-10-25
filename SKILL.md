@@ -54,17 +54,16 @@ registered — this is only for choosing sections before registering.
    courses in this list. If no RateMyProfessors page is found for an instructor, use `null` for
    their rating rather than guessing — the script treats unrated sections as the least preferred
    on the professor axis, and you should flag it to the student.
-7. **Run the planner.** Write what you gathered into a JSON file shaped like
-   `assets/sample_input.json` in this Skill's folder (course names, priority as 1 = highest, the
-   axis, the schedule spec if any, and each course's sections with `class_number`, `instructor`,
-   `rating`, `days`, `start`, `end`), then run:
+7. **Run the planner.** Write what you gathered into a JSON file (course names, priority as 1 =
+   highest, the axis, the schedule spec if any, and each course's sections with `class_number`,
+   `instructor`, `rating`, `days`, `start`, `end`), then run:
 
    ```bash
-   python3 scripts/plan_schedule.py --input <path to the JSON file you wrote>
+   python3 plan_schedule.py --input <path to the JSON file you wrote>
    ```
 
-   Try it first with `python3 scripts/plan_schedule.py --sample` to see the shape of the output
-   before building a real input file.
+   Try `python3 plan_schedule.py --sample` first to see the exact input/output shape from a
+   built-in example before building a real input file.
 8. **Relay the result**, in the Replies format below. For any course in the output's
    `"unresolved"` list, tell the student plainly that nothing conflict-free was found and show the
    closest option anyway so they can decide by hand (maybe they drop a lower-priority class or
