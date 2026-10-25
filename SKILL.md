@@ -45,11 +45,19 @@ registered — this is only for choosing sections before registering.
    - `compact: true` if they said something like "back to back", "no dead time between classes",
      or "don't want to be on campus longer than I have to"
    Any of these can be combined or omitted; only set what the student actually said.
-4. **Ask which term**, if not already said (e.g. "Spring 2026"). If their courses look like they
-   could span more than one physical campus, also ask how much travel time they want between
-   back-to-back classes on different campuses. Default to 30 minutes if they don't have an opinion,
-   but say that's the default you're using so they can correct it.
-5. **Gather sections for each course** using the **browser**: open ASU's public class search
+4. **Ask how much travel time they want between back-to-back classes on different campuses**,
+   every time, before gathering sections — you won't know which campuses are involved until
+   afterward, so don't wait to see if it looks relevant. Default to 30 minutes if they don't have
+   an opinion, but say that's the default you're using so they can correct it.
+5. **Term: don't ask, and don't change it unless the student names one.** ASU's class search
+   already defaults to the next nearest semester, which is correct for "next semester" or any
+   unqualified request — leave the term selector alone and search directly. Only touch it when the
+   student names a specific term themselves (e.g. "I mean Fall 2027"). Changing it is currently
+   flaky on ASU's site: picking some future terms (seen with Spring 2027 and Fall 2027) leaves the
+   page stuck loading indefinitely. If that happens, don't wait on it — tell the student the term
+   selector seems to be stuck for that term on ASU's site right now, and offer to use the default
+   term instead or try again in a bit.
+6. **Gather sections for each course** using the **browser**: open ASU's public class search
    (https://catalog.apps.asu.edu/catalog/classes/classlist), search the course's subject and
    catalog number for that term, and read every open section's listing. The page layout can
    shift, so look for the columns by meaning rather than an exact position: a class number
@@ -75,13 +83,13 @@ registered — this is only for choosing sections before registering.
      students in an online degree program. The class search listing doesn't reliably say which.
      Include it as an option, but tell the student their eligibility for it isn't confirmed and
      they should check before registering.
-6. **Look up each distinct instructor's rating** using the **web**: search `<instructor name>
+7. **Look up each distinct instructor's rating** using the **web**: search `<instructor name>
    ratemyprofessors Arizona State University` and read their RateMyProfessors page for the
    overall rating. Look up each instructor once even if they teach multiple sections or multiple
    courses in this list. If no RateMyProfessors page is found for an instructor, use `null` for
    their rating rather than guessing — the script treats unrated sections as the least preferred
    on the professor axis, and you should flag it to the student.
-7. **Run the planner.** Write what you gathered into a JSON file (course names, priority as 1 =
+8. **Run the planner.** Write what you gathered into a JSON file (course names, priority as 1 =
    highest, the axis, the schedule spec if any, the travel buffer in minutes if discussed, and
    each course's sections with `class_number`, `instructor`, `rating`, `campus`, `days`, `start`,
    `end`, and `recitation` where it applies), then run:
@@ -92,7 +100,7 @@ registered — this is only for choosing sections before registering.
 
    Try `python3 plan_schedule.py --sample` first to see the exact input/output shape from a
    built-in example before building a real input file.
-8. **Relay the result**, in the Replies format below. For any course in the output's
+9. **Relay the result**, in the Replies format below. For any course in the output's
    `"unresolved"` list, tell the student plainly that nothing conflict-free was found and show the
    closest option anyway so they can decide by hand (maybe they drop a lower-priority class or
    re-rank).
@@ -116,6 +124,10 @@ actually type into registration, and ask if they want anything re-ranked.
 
 - Class search has no sections for a course, or the course code doesn't exist for that term: say
   so and ask the student to double check the course code or term.
+- The class search page hangs after changing the term: this is a known issue with some future
+  terms on ASU's site, not a connection problem — don't keep waiting or retry the same term
+  silently. Tell the student the term selector seems stuck right now, and offer the default term
+  (next nearest semester) or trying again later.
 - An instructor's RateMyProfessors page can't be found: use `null` for that section's rating, tell
   the student there's no rating for that professor, and keep going — don't block the whole plan on
   one missing rating.
