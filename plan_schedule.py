@@ -12,7 +12,17 @@ Input (JSON, via --input, or the built-in example via --sample):
       "priority": 1,
       "sections": [
         {"class_number": "12345", "instructor": "Jane Smith", "rating": 4.6,
-         "days": ["Mon", "Wed", "Fri"], "start": "10:00", "end": "10:50"}
+         "days": ["Mon", "Wed", "Fri"], "start": "10:00", "end": "10:50"},
+
+        // asynchronous section: no fixed meeting time, so it can never conflict with
+        // anything. Omit "days"/"start"/"end" (or leave them empty/null) instead of guessing a time.
+        {"class_number": "99999", "instructor": "Jane Smith", "rating": 4.6},
+
+        // a lecture with a required, separately-numbered recitation: both class numbers
+        // are needed, and both time blocks count for conflicts.
+        {"class_number": "12346", "instructor": "Jane Smith", "rating": 4.6,
+         "days": ["Mon", "Wed"], "start": "09:00", "end": "09:50",
+         "recitation": {"class_number": "12347", "days": ["Fri"], "start": "09:00", "end": "09:50"}}
       ]
     }
   ]
@@ -63,6 +73,22 @@ SAMPLE_INPUT = {
                  "days": ["Mon", "Wed", "Fri"], "start": "11:00", "end": "11:50"},
             ],
         },
+        {
+            "name": "CSE 355",
+            "priority": 4,
+            "sections": [
+                {"class_number": "10301", "instructor": "F. Osei", "rating": 4.3,
+                 "days": ["Mon", "Wed"], "start": "09:00", "end": "09:50",
+                 "recitation": {"class_number": "10302", "days": ["Fri"], "start": "09:00", "end": "09:50"}},
+            ],
+        },
+        {
+            "name": "CSE 365",
+            "priority": 5,
+            "sections": [
+                {"class_number": "10401", "instructor": "G. Olsen", "rating": 3.9},
+            ],
+        },
     ],
 }
 
@@ -72,7 +98,25 @@ def parse_time(t):
     return int(h) * 60 + int(m)
 
 
-def sections_conflict(a, b):
+def is_async(section):
+    """No fixed meeting time: nothing to conflict with and nothing to score against."""
+    return not section.get("days") or not section.get("start") or not section.get("end")
+
+
+def get_blocks(section):
+    """A section's time blocks for conflict-checking: its own meeting time (if any) plus a
+    linked recitation's, if it has one. An async section with no recitation has zero blocks,
+    so it can never conflict with anything."""
+    blocks = []
+    if not is_async(section):
+        blocks.append({"days": section["days"], "start": section["start"], "end": section["end"]})
+    recitation = section.get("recitation")
+    if recitation and not is_async(recitation):
+        blocks.append(recitation)
+    return blocks
+
+
+def blocks_conflict(a, b):
     if not (set(a["days"]) & set(b["days"])):
         return False
     a_start, a_end = parse_time(a["start"]), parse_time(a["end"])
@@ -80,8 +124,12 @@ def sections_conflict(a, b):
     return a_start < b_end and b_start < a_end
 
 
+def sections_conflict(a, b):
+    return any(blocks_conflict(ba, bb) for ba in get_blocks(a) for bb in get_blocks(b))
+
+
 def schedule_violation_points(section, spec):
-    if not spec:
+    if not spec or is_async(section):
         return 0
     points = 0
     start, end = parse_time(section["start"]), parse_time(section["end"])
@@ -101,9 +149,13 @@ def schedule_violation_points(section, spec):
 
 
 def compactness_gap(section, locked):
+    if is_async(section):
+        return 0
     s_start, s_end = parse_time(section["start"]), parse_time(section["end"])
     best_gap = None
     for locked_section in locked:
+        if is_async(locked_section):
+            continue
         shared_days = set(locked_section["days"]) & set(section["days"])
         if not shared_days:
             continue
@@ -163,16 +215,24 @@ def plan(data):
         )
 
         locked.append(picked)
-        picks.append({
+        pick = {
             "course": course["name"],
             "class_number": picked["class_number"],
             "instructor": picked["instructor"],
             "rating": picked.get("rating"),
-            "days": picked["days"],
-            "start": picked["start"],
-            "end": picked["end"],
+            "async": is_async(picked),
+            "days": picked.get("days") or [],
+            "start": picked.get("start"),
+            "end": picked.get("end"),
             "compromised": compromised,
-        })
+        }
+        recitation = picked.get("recitation")
+        if recitation:
+            pick["recitation_class_number"] = recitation.get("class_number")
+            pick["recitation_days"] = recitation.get("days")
+            pick["recitation_start"] = recitation.get("start")
+            pick["recitation_end"] = recitation.get("end")
+        picks.append(pick)
 
     return {"axis": axis, "picks": picks, "unresolved": unresolved}
 

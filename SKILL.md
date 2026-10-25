@@ -47,7 +47,17 @@ registered — this is only for choosing sections before registering.
    shift, so look for the columns by meaning rather than an exact position: a class number
    (5-digit ASU registration number), instructor name, days, and start/end time. Skip sections
    with no listed instructor (nothing to rate, and usually a placeholder) unless a course has no
-   other option. No sign-in is needed; this tool is public.
+   other option. No sign-in is needed; this tool is public. Two listing shapes need different
+   handling, not skipping:
+   - **Linked recitation.** A lecture section paired with a required, separately-numbered
+     recitation or lab. Record both class numbers; nest the recitation's own days/start/end under
+     a `"recitation"` field on the lecture's section object (see the script's `--sample` output
+     for the shape). The planner checks both time blocks for conflicts and the final report must
+     show both class numbers, since the student has to register for both.
+   - **Asynchronous section.** No fixed meeting days or time at all. Leave `"days"`, `"start"` and
+     `"end"` out of that section entirely rather than guessing a time — the planner treats a
+     section with no listed time as never conflicting with anything, which is correct for async.
+     Tell the student it's asynchronous when you report it.
 6. **Look up each distinct instructor's rating** using the **web**: search `<instructor name>
    ratemyprofessors Arizona State University` and read their RateMyProfessors page for the
    overall rating. Look up each instructor once even if they teach multiple sections or multiple
@@ -72,9 +82,12 @@ registered — this is only for choosing sections before registering.
 ## Replies
 
 Keep it short and plain text, one idea per message, no Markdown symbols. One line per class:
-course, class number, instructor, rating (or "no rating yet"), days and time. Lead with the
-top-priority class. When a pick was a compromise (the script's `"compromised": true`), say why in
-a half-sentence — "CSE 430's top pick clashed with CSE 410, so this is the next best." If more
+course, class number, instructor, rating (or "no rating yet"), days and time. If the pick has a
+`"recitation_class_number"`, name both numbers on that line — the student registers for both. If
+`"async": true`, say "asynchronous, no fixed meeting time" instead of a days/time that doesn't
+exist. Lead with the top-priority class. When a pick was a compromise (the script's
+`"compromised": true`), say why in a half-sentence — "CSE 430's top pick clashed with CSE 410, so
+this is the next best." If more
 than five classes are in the plan, offer to send a one-page document instead of a wall of texts,
 and only speak the first three plus the total count until the student asks for the rest. Always
 end with the class numbers together in one line, since that's what the student will actually type
