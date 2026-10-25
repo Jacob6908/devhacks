@@ -6,21 +6,22 @@ Input (JSON, via --input, or the built-in example via --sample):
   "axis": "professor" | "schedule",
   "schedule_spec": {"earliest_start": "10:00", "latest_end": "15:00",
                      "days_off": ["Fri"], "compact": true} | null,
+  "travel_buffer_minutes": 30,
   "courses": [
     {
       "name": "CSE 410",
       "priority": 1,
       "sections": [
-        {"class_number": "12345", "instructor": "Jane Smith", "rating": 4.6,
+        {"class_number": "12345", "instructor": "Jane Smith", "rating": 4.6, "campus": "Tempe",
          "days": ["Mon", "Wed", "Fri"], "start": "10:00", "end": "10:50"},
 
         // asynchronous section: no fixed meeting time, so it can never conflict with
         // anything. Omit "days"/"start"/"end" (or leave them empty/null) instead of guessing a time.
-        {"class_number": "99999", "instructor": "Jane Smith", "rating": 4.6},
+        {"class_number": "99999", "instructor": "Jane Smith", "rating": 4.6, "campus": "ASU Online"},
 
         // a lecture with a required, separately-numbered recitation: both class numbers
         // are needed, and both time blocks count for conflicts.
-        {"class_number": "12346", "instructor": "Jane Smith", "rating": 4.6,
+        {"class_number": "12346", "instructor": "Jane Smith", "rating": 4.6, "campus": "Tempe",
          "days": ["Mon", "Wed"], "start": "09:00", "end": "09:50",
          "recitation": {"class_number": "12347", "days": ["Fri"], "start": "09:00", "end": "09:50"}}
       ]
@@ -30,6 +31,11 @@ Input (JSON, via --input, or the built-in example via --sample):
 
 "rating" may be null when no RateMyProfessors page was found for that instructor.
 Days use three-letter codes: Mon, Tue, Wed, Thu, Fri, Sat, Sun.
+"campus" is optional free text (e.g. "Tempe", "West Valley", "ASU Online"); when two sections sit
+on different physical campuses back to back, "travel_buffer_minutes" (default 30) of gap is
+required between them or they count as conflicting. Anything with "online" in its campus name
+needs no travel buffer. "campus" can also be set on a "recitation" block when it differs from its
+lecture's campus.
 
 Output (JSON on stdout): the locked-in pick per course, plus any course that could not
 get a conflict-free section, with its closest (still-conflicting) option for reference.
@@ -40,18 +46,20 @@ import sys
 from pathlib import Path
 
 UNRATED_SCORE = 0  # worse than any real rating (-1 to -5), so unrated sections sort last
+DEFAULT_TRAVEL_BUFFER_MINUTES = 30
 
 SAMPLE_INPUT = {
     "axis": "professor",
-    "schedule_spec": None,
+    "schedule_spec": {"latest_end": "15:00"},
+    "travel_buffer_minutes": 30,
     "courses": [
         {
             "name": "CSE 410",
             "priority": 1,
             "sections": [
-                {"class_number": "10001", "instructor": "A. Rivera", "rating": 4.5,
+                {"class_number": "10001", "instructor": "A. Rivera", "rating": 4.5, "campus": "Tempe",
                  "days": ["Mon", "Wed", "Fri"], "start": "10:00", "end": "10:50"},
-                {"class_number": "10002", "instructor": "B. Chen", "rating": 3.2,
+                {"class_number": "10002", "instructor": "B. Chen", "rating": 3.2, "campus": "Tempe",
                  "days": ["Tue", "Thu"], "start": "13:30", "end": "14:45"},
             ],
         },
@@ -59,9 +67,9 @@ SAMPLE_INPUT = {
             "name": "CSE 430",
             "priority": 2,
             "sections": [
-                {"class_number": "10101", "instructor": "C. Patel", "rating": 4.5,
+                {"class_number": "10101", "instructor": "C. Patel", "rating": 4.5, "campus": "Tempe",
                  "days": ["Mon", "Wed", "Fri"], "start": "10:00", "end": "10:50"},
-                {"class_number": "10102", "instructor": "D. Nguyen", "rating": 4.1,
+                {"class_number": "10102", "instructor": "D. Nguyen", "rating": 4.1, "campus": "Tempe",
                  "days": ["Tue", "Thu"], "start": "14:00", "end": "15:15"},
             ],
         },
@@ -69,7 +77,7 @@ SAMPLE_INPUT = {
             "name": "HIST 103",
             "priority": 3,
             "sections": [
-                {"class_number": "10201", "instructor": "E. Brooks", "rating": None,
+                {"class_number": "10201", "instructor": "E. Brooks", "rating": None, "campus": "Tempe",
                  "days": ["Mon", "Wed", "Fri"], "start": "11:00", "end": "11:50"},
             ],
         },
@@ -77,16 +85,29 @@ SAMPLE_INPUT = {
             "name": "CSE 355",
             "priority": 4,
             "sections": [
-                {"class_number": "10301", "instructor": "F. Osei", "rating": 4.3,
-                 "days": ["Mon", "Wed"], "start": "09:00", "end": "09:50",
-                 "recitation": {"class_number": "10302", "days": ["Fri"], "start": "09:00", "end": "09:50"}},
+                # two sections, same instructor, same rating -- a real tie. The first option is a
+                # schedule-axis win (ends earlier, more travel room); the second collides with CSE 360.
+                {"class_number": "25636", "instructor": "H. Lee", "rating": 4.0, "campus": "Tempe",
+                 "days": ["Mon", "Wed"], "start": "13:30", "end": "14:45"},
+                {"class_number": "14971", "instructor": "H. Lee", "rating": 4.0, "campus": "Tempe",
+                 "days": ["Mon", "Wed"], "start": "15:00", "end": "16:15"},
+            ],
+        },
+        {
+            "name": "CSE 360",
+            "priority": 5,
+            "sections": [
+                # only 15 minutes after CSE 355's later section, and a different campus --
+                # a real transfer, not just a conflict, so travel_buffer_minutes applies here.
+                {"class_number": "29843", "instructor": "D. Claveau", "rating": 4.0, "campus": "West Valley",
+                 "days": ["Mon", "Wed"], "start": "16:30", "end": "17:45"},
             ],
         },
         {
             "name": "CSE 365",
-            "priority": 5,
+            "priority": 6,
             "sections": [
-                {"class_number": "10401", "instructor": "G. Olsen", "rating": 3.9},
+                {"class_number": "23647", "instructor": "J. Baek", "rating": 3.5, "campus": "ASU Online"},
             ],
         },
     ],
@@ -106,26 +127,41 @@ def is_async(section):
 def get_blocks(section):
     """A section's time blocks for conflict-checking: its own meeting time (if any) plus a
     linked recitation's, if it has one. An async section with no recitation has zero blocks,
-    so it can never conflict with anything."""
+    so it can never conflict with anything. A recitation without its own campus inherits its
+    lecture's."""
     blocks = []
     if not is_async(section):
-        blocks.append({"days": section["days"], "start": section["start"], "end": section["end"]})
+        blocks.append({"days": section["days"], "start": section["start"], "end": section["end"],
+                        "campus": section.get("campus")})
     recitation = section.get("recitation")
     if recitation and not is_async(recitation):
-        blocks.append(recitation)
+        blocks.append({"days": recitation["days"], "start": recitation["start"], "end": recitation["end"],
+                        "campus": recitation.get("campus", section.get("campus"))})
     return blocks
 
 
-def blocks_conflict(a, b):
+def needs_travel_buffer(campus_a, campus_b):
+    def physical(c):
+        return bool(c) and "online" not in c.lower()
+    return physical(campus_a) and physical(campus_b) and campus_a.strip().lower() != campus_b.strip().lower()
+
+
+def blocks_conflict(a, b, travel_buffer_minutes):
     if not (set(a["days"]) & set(b["days"])):
         return False
     a_start, a_end = parse_time(a["start"]), parse_time(a["end"])
     b_start, b_end = parse_time(b["start"]), parse_time(b["end"])
-    return a_start < b_end and b_start < a_end
+    if a_start < b_end and b_start < a_end:
+        return True
+    if needs_travel_buffer(a.get("campus"), b.get("campus")):
+        gap = (b_start - a_end) if a_end <= b_start else (a_start - b_end)
+        if gap < travel_buffer_minutes:
+            return True
+    return False
 
 
-def sections_conflict(a, b):
-    return any(blocks_conflict(ba, bb) for ba in get_blocks(a) for bb in get_blocks(b))
+def sections_conflict(a, b, travel_buffer_minutes):
+    return any(blocks_conflict(ba, bb, travel_buffer_minutes) for ba in get_blocks(a) for bb in get_blocks(b))
 
 
 def schedule_violation_points(section, spec):
@@ -172,14 +208,17 @@ def compactness_gap(section, locked):
 
 
 def score(section, axis, spec, locked):
-    """Lower is always better, across both axes."""
-    if axis == "professor":
-        rating = section.get("rating")
-        return UNRATED_SCORE if rating is None else -rating
-    points = schedule_violation_points(section, spec)
+    """A (primary, tiebreak) pair; lower is always better, in both slots. The axis the student
+    didn't pick as primary still breaks ties on the one they did -- e.g. two equally-rated
+    professors get decided by schedule fit instead of arbitrary list order."""
+    rating = section.get("rating")
+    rating_score = UNRATED_SCORE if rating is None else -rating
+    schedule_score = schedule_violation_points(section, spec)
     if spec and spec.get("compact"):
-        points += compactness_gap(section, locked)
-    return points
+        schedule_score += compactness_gap(section, locked)
+    if axis == "professor":
+        return (rating_score, schedule_score)
+    return (schedule_score, rating_score)
 
 
 def best_unconstrained(sections, axis, spec, locked):
@@ -189,6 +228,7 @@ def best_unconstrained(sections, axis, spec, locked):
 def plan(data):
     axis = data["axis"]
     spec = data.get("schedule_spec")
+    travel_buffer = data.get("travel_buffer_minutes", DEFAULT_TRAVEL_BUFFER_MINUTES)
     courses = sorted(data["courses"], key=lambda c: c["priority"])
 
     locked = []
@@ -197,7 +237,7 @@ def plan(data):
 
     for course in courses:
         sections = course["sections"]
-        candidates = [s for s in sections if not any(sections_conflict(s, L) for L in locked)]
+        candidates = [s for s in sections if not any(sections_conflict(s, L, travel_buffer) for L in locked)]
 
         if not candidates:
             closest = best_unconstrained(sections, axis, spec, locked)
@@ -220,6 +260,7 @@ def plan(data):
             "class_number": picked["class_number"],
             "instructor": picked["instructor"],
             "rating": picked.get("rating"),
+            "campus": picked.get("campus"),
             "async": is_async(picked),
             "days": picked.get("days") or [],
             "start": picked.get("start"),
